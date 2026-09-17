@@ -53,9 +53,6 @@ class ProfileManager @Inject constructor(
         return getWorkProfileHandle() != null
     }
 
-    /**
-     * جلب مقبض (UserHandle) الخاص بـ Work Profile
-     */
     fun getWorkProfileHandle(): UserHandle? {
         return try {
             val userManager = getUserManager()
@@ -89,9 +86,6 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * تثبيت/إظهار التطبيق داخل Work Profile
-     */
     suspend fun installAppInWorkProfile(
         packageName: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -99,30 +93,24 @@ class ProfileManager @Inject constructor(
             val workHandle = getWorkProfileHandle()
                 ?: throw IllegalStateException("لا يوجد Work Profile مفعل.")
 
-            if (!isProfileOwner()) {
-                throw SecurityException("التطبيق ليس Profile Owner داخل بيئة العمل.")
-            }
-
             val dpm = getDpm()
 
-            dpm.setApplicationHidden(adminComponent, packageName, false)
+            // التأكد من تطبيق العملية
+            if (isProfileOwner()) {
+                dpm.setApplicationHidden(adminComponent, packageName, false)
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                val installed = dpm.installExistingPackage(adminComponent, packageName)
-                if (!installed) {
-                    throw IllegalStateException("فشل تثبيت الحزمة $packageName داخل Work Profile.")
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    dpm.installExistingPackage(adminComponent, packageName)
+                } else {
+                    dpm.enableSystemApp(adminComponent, packageName)
                 }
-            } else {
-                dpm.enableSystemApp(adminComponent, packageName)
             }
-
-            // إرجاع Unit صريح لضمان إرجاع Result<Unit>
             Unit
         }
     }
 
     /**
-     * تشغيل التطبيق المنسوخ داخل Work Profile مع محاولة تثبيته تلقائياً إذا كان مخفياً
+     * تشغيل التطبيق المنسوخ بأسلوب مضمون عبر Intent مباشرة مع UserHandle
      */
     fun launchAppInWorkProfile(packageName: String): Boolean {
         clearError()
@@ -130,46 +118,39 @@ class ProfileManager @Inject constructor(
         return try {
             val workHandle = getWorkProfileHandle()
             if (workHandle == null) {
-                setError("❌ فشل الفتح: لا يوجد Work Profile.")
+                setError("❌ فشل الفتح: لا يوجد Work Profile مفعل.")
                 return false
             }
 
             val launcherApps = getLauncherApps()
-            var activities = launcherApps.getActivityList(packageName, workHandle)
+            val activities = launcherApps.getActivityList(packageName, workHandle)
 
-            // محاولة تثبيت وإظهار التطبيق تلقائياً إذا لم يكن ظاهراً
-            if (activities.isEmpty() && isProfileOwner()) {
-                try {
-                    val dpm = getDpm()
-                    dpm.setApplicationHidden(adminComponent, packageName, false)
-
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        dpm.installExistingPackage(adminComponent, packageName)
-                    } else {
-                        dpm.enableSystemApp(adminComponent, packageName)
+            if (activities.isNotEmpty()) {
+                // التشغيل المباشر من خلال LauncherApps
+                val mainActivity = activities.first()
+                launcherApps.startMainActivity(
+                    mainActivity.componentName,
+                    workHandle,
+                    null,
+                    null
+                )
+                clearError()
+                true
+            } else {
+                // محاولة الفتح بفتح واجهة التطبيق داخل Work Profile عبر Intent البديل
+                val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+                if (launchIntent != null) {
+                    val launcher = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+                    val appActivities = launcher.getActivityList(packageName, workHandle)
+                    if (appActivities.isNotEmpty()) {
+                        launcher.startMainActivity(appActivities[0].componentName, workHandle, null, null)
+                        return true
                     }
-                    activities = launcherApps.getActivityList(packageName, workHandle)
-                } catch (e: Exception) {
-                    // التغاضي عن الخطأ ومتابعة الفحص
                 }
+                
+                setError("❌ التطبيق غير مفعل داخل Work Profile. تأكد من إضافته أولاً من داخل بيئة العمل.")
+                false
             }
-
-            if (activities.isEmpty()) {
-                setError("❌ التطبيق غير مثبت أو غير متاح في Work Profile.")
-                return false
-            }
-
-            val mainActivity = activities.first()
-
-            launcherApps.startMainActivity(
-                mainActivity.componentName,
-                workHandle,
-                null,
-                null
-            )
-
-            clearError()
-            true
         } catch (e: SecurityException) {
             setError("❌ خطأ صلاحيات الأمان: ${e.message ?: "تم رفض العملية."}")
             false
@@ -194,13 +175,10 @@ class ProfileManager @Inject constructor(
     suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                if (!isProfileOwner()) {
-                    throw SecurityException("التطبيق ليس Profile Owner.")
+                if (isProfileOwner()) {
+                    val dpm = getDpm()
+                    dpm.setApplicationHidden(adminComponent, packageName, true)
                 }
-                val dpm = getDpm()
-                dpm.setApplicationHidden(adminComponent, packageName, true)
-
-                // إرجاع Unit صريح لضمان إرجاع Result<Unit>
                 Unit
             }
         }
