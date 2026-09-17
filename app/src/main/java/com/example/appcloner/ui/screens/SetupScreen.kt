@@ -14,8 +14,13 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.appcloner.admin.ProfileManager
@@ -25,8 +30,15 @@ fun SetupScreen(
     profileManager: ProfileManager,
     onSetupComplete: () -> Unit
 ) {
-    val isDeviceOwner = profileManager.isDeviceOwner()
-    val hasProfile = profileManager.hasWorkProfile()
+    // إدخال الحالة داخل State حتى يعاد رسم الشاشة عند تغيير قيمتها
+    var isDeviceOwner by remember { mutableStateOf(profileManager.isDeviceOwner()) }
+    var hasProfile by remember { mutableStateOf(profileManager.hasWorkProfile()) }
+
+    // إعادة الفحص عند دخول الشاشة
+    fun refreshStatus() {
+        isDeviceOwner = profileManager.isDeviceOwner()
+        hasProfile = profileManager.hasWorkProfile()
+    }
 
     LaunchedEffect(isDeviceOwner, hasProfile) {
         if (isDeviceOwner && hasProfile) onSetupComplete()
@@ -81,12 +93,12 @@ fun SetupScreen(
                     text = "adb shell dpm set-device-owner\ncom.example.appcloner/.admin.DeviceAdmin",
                     modifier = Modifier.padding(12.dp),
                     style = MaterialTheme.typography.bodySmall,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace
+                    fontFamily = FontFamily.Monospace
                 )
             }
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = { /* سيتم إعادة التحقق عند العودة */ },
+                onClick = { refreshStatus() },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("تحقق من الحالة")
@@ -103,7 +115,10 @@ fun SetupScreen(
             )
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = { /* profileManager.createWorkProfile() */ },
+                onClick = { 
+                    /* profileManager.createWorkProfile() */ 
+                    refreshStatus()
+                },
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("إنشاء البيئة المعزولة")
