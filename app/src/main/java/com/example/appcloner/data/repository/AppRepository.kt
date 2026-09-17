@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import com.example.appcloner.admin.ProfileManager
 import com.example.appcloner.domain.model.AppInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,15 +21,16 @@ class AppRepository @Inject constructor(
     }
 
     /**
-     * جلب التطبيقات المنسوخة كـ List<AppInfo>
+     * إرجاع التطبيقات المنسوخة كـ Flow<List<AppInfo>> لتتوافق مع HomeViewModel و stateIn
      */
-    fun getClonedApps(): List<AppInfo> {
+    fun getClonedApps(): Flow<List<AppInfo>> = flow {
         val packageNames = profileManager.getWorkProfileApps()
-        return packageNames.map { pkg -> createAppInfo(pkg) }
+        val apps = packageNames.map { pkg -> createAppInfo(pkg) }
+        emit(apps)
     }
 
     /**
-     * جلب التطبيقات الشخصية كـ List<AppInfo>
+     * إرجاع التطبيقات الشخصية كـ List<AppInfo>
      */
     fun getPersonalApps(): List<AppInfo> {
         val packageNames = profileManager.getPersonalApps()
@@ -78,18 +81,23 @@ class AppRepository @Inject constructor(
         val pm = context.packageManager
         return try {
             val appInfo = pm.getApplicationInfo(packageName, 0)
+            val pkgInfo = pm.getPackageInfo(packageName, 0)
             val label = pm.getApplicationLabel(appInfo).toString()
             val icon = pm.getApplicationIcon(appInfo)
+            val versionName = pkgInfo.versionName ?: "1.0.0"
+            
             AppInfo(
                 packageName = packageName,
                 label = label,
-                icon = icon
+                icon = icon,
+                versionName = versionName
             )
         } catch (e: Exception) {
             AppInfo(
                 packageName = packageName,
                 label = packageName,
-                icon = null
+                icon = null,
+                versionName = "1.0.0"
             )
         }
     }
