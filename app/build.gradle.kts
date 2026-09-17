@@ -8,7 +8,6 @@ plugins {
 
 android {
     namespace = "com.example.appcloner"
-    // تم التغيير إلى 34 لضمان استقرار البناء في بيئات CI/CD وتجنب أخطاء AAPT
     compileSdk = 34
 
     defaultConfig {
@@ -23,7 +22,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
-            isShrinkResources = true // تفعيل ضغط الموارد لتقليل حجم APK
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -50,6 +49,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
+
+    // Material (مهم جداً لحل مشكلة الثيم)
+    implementation("com.google.android.material:material:1.11.0")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.09.02"))
