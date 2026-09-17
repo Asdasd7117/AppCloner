@@ -72,6 +72,8 @@ class ProfileManager @Inject constructor(
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val dpm = getDpm()
+            
+            // إلغاء أي إخفاء سابق للتطبيق
             dpm.setApplicationHidden(adminComponent, packageName, false)
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -92,7 +94,7 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تشغيل تطبيق داخل Work Profile مع إعادة المحاولة لتأكيد وجود الواجهة
+     * تشغيل تطبيق داخل Work Profile (دالة Suspend متوافقة مع Coroutines و AppRepository)
      */
     suspend fun launchAppInWorkProfile(packageName: String): Boolean = withContext(Dispatchers.IO) {
         val workHandle = getWorkProfileHandle() ?: return@withContext false
@@ -101,11 +103,11 @@ class ProfileManager @Inject constructor(
         // 1. محاولة تثبيت/تمكين الحزمة أولاً
         installAppInWorkProfile(packageName)
 
-        // 2. البحث عن الأنشطة المتاحة (مع التكرار في حال استغرق النظام وقتاً لتسجيل التطبيق)
+        // 2. إعادة المحاولة مع تأخير بسيط لإعطاء النظام فرصة لتسجيل الواجهة
         var activityList = launcherApps.getActivityList(packageName, workHandle)
         var attempts = 0
         while (activityList.isEmpty() && attempts < 3) {
-            delay(300) // انتظار 300 ملي ثانية لإنهاء تسجيل الحزمة
+            delay(300)
             activityList = launcherApps.getActivityList(packageName, workHandle)
             attempts++
         }
