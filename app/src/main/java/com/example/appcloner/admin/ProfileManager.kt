@@ -12,7 +12,6 @@ import android.os.UserHandle
 import android.os.UserManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -32,25 +31,16 @@ class ProfileManager @Inject constructor(
         return context.getSystemService(Context.USER_SERVICE) as UserManager
     }
 
-    /**
-     * هل يوجد Work Profile مُنشأ حالياً؟
-     */
     fun hasWorkProfile(): Boolean {
         return getWorkProfileHandle() != null
     }
 
-    /**
-     * الحصول على UserHandle للـ Work Profile
-     */
     fun getWorkProfileHandle(): UserHandle? {
         val um = getUserManager()
         val myUser = Process.myUserHandle()
         return um.userProfiles.firstOrNull { it != myUser }
     }
 
-    /**
-     * إنشاء Intent لبدء عملية إعداد Work Profile من واجهة النظام الرسمية
-     */
     fun createWorkProfileIntent(): Intent {
         return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
             putExtra(
@@ -66,72 +56,74 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * تثبيت/تفعيل تطبيق داخل Work Profile
-     */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
+            getWorkProfileHandle() ?: throw IllegalStateException("لم يتم العثور على Work Profile")
             val dpm = getDpm()
-            
-            // إلغاء أي إخفاء سابق للتطبيق
             dpm.setApplicationHidden(adminComponent, packageName, false)
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    dpm.installExistingPackage(adminComponent, packageName)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                dpm.installExistingPackage(adminComponent, packageName)
             } else {
-                try {
-                    dpm.enableSystemApp(adminComponent, packageName)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                dpm.enableSystemApp(adminComponent, packageName)
             }
             Unit
         }
     }
 
     /**
-     * تشغيل تطبيق داخل Work Profile (دالة Suspend متوافقة مع Coroutines و AppRepository)
+     * تشغيل التطبيق وإرجاع نتيجة تفصيلية أو سبب الفشل الدقيق
      */
-    suspend fun launchAppInWorkProfile(packageName: String): Boolean = withContext(Dispatchers.IO) {
-        val workHandle = getWorkProfileHandle() ?: return@withContext false
+    fun launchAppInWorkProfile(packageName: String): Result<Unit> {
+        val workHandle = getWorkProfileHandle()
+            ?: return Result.failure(Exception("خطأ: لم يتم إنشاء البيئة المعزولة (Work Profile) بعد."))
+
+        val dpm = getDpm()
+        var lastException: Exception? = null
+
+        // محاولة تثبيت/تمكين الحزمة
+        try {
+            dpm.setApplicationHidden(adminComponent, packageName, false)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                dpm.installExistingPackage(adminComponent, packageName)
+            } else {
+                dpm.enableSystemApp(adminComponent, packageName)
+            }
+        } catch (e: Exception) {
+            lastException = e
+        }
+
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
-
-        // 1. محاولة تثبيت/تمكين الحزمة أولاً
-        installAppInWorkProfile(packageName)
-
-        // 2. إعادة المحاولة مع تأخير بسيط لإعطاء النظام فرصة لتسجيل الواجهة
         var activityList = launcherApps.getActivityList(packageName, workHandle)
+
+        // محاولة إعادة الفحص في حال استغرق النظام وقتاً
         var attempts = 0
         while (activityList.isEmpty() && attempts < 3) {
-            delay(300)
+            try { Thread.sleep(200) } catch (_: Exception) {}
             activityList = launcherApps.getActivityList(packageName, workHandle)
             attempts++
         }
 
-        val activityInfo = activityList.firstOrNull() ?: return@withContext false
+        val activityInfo = activityList.firstOrNull()
+            ?: return Result.failure(
+                Exception(
+                    "فشل الفتح: التطبيق غير مثبت داخل الـ Work Profile، والتطبيق الحالي لا يملك صلاحية Profile Owner داخل العزل لتثبيته تلقائياً.\nالسبب: ${lastException?.localizedMessage ?: "عدم وجود صلاحيات كافية"}"
+                )
+            )
 
-        // 3. تشغيل النشاط الرئيسي
-        return@withContext try {
+        return try {
             launcherApps.startMainActivity(
                 activityInfo.componentName,
                 workHandle,
                 null,
                 null
             )
-            true
+            Result.success(Unit)
         } catch (e: Exception) {
-            e.printStackTrace()
-            false
+            Result.failure(Exception("خطأ أثناء تشغيل الواجهة: ${e.localizedMessage}"))
         }
     }
 
-    /**
-     * إيقاف تطبيق في Work Profile
-     */
     fun stopAppInWorkProfile(packageName: String) {
         try {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -141,20 +133,14 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * إخفاء/إزالة تطبيق من Work Profile
-     */
     suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            getWorkProfileHandle() ?: throw IllegalStateException("No work profile found")
+            getWorkProfileHandle() ?: throw IllegalStateException("لم يتم العثور على Work Profile")
             getDpm().setApplicationHidden(adminComponent, packageName, true)
             Unit
         }
     }
 
-    /**
-     * حذف Work Profile بالكامل
-     */
     suspend fun removeWorkProfile(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val dpm = getDpm()
@@ -165,9 +151,6 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * الحصول على التطبيقات المثبتة في Work Profile
-     */
     fun getWorkProfileApps(): List<String> {
         val workHandle = getWorkProfileHandle() ?: return emptyList()
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
@@ -176,9 +159,6 @@ class ProfileManager @Inject constructor(
             .distinct()
     }
 
-    /**
-     * الحصول على جميع التطبيقات القابلة للنسخ (المثبتة في البروفايل الشخصي)
-     */
     fun getPersonalApps(): List<String> {
         val pm = context.packageManager
         return pm.getInstalledApplications(PackageManager.GET_META_DATA)
