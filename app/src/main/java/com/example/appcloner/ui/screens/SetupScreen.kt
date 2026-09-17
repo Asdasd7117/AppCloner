@@ -1,5 +1,8 @@
 package com.example.appcloner.ui.screens
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -20,7 +23,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.appcloner.admin.ProfileManager
@@ -30,18 +32,22 @@ fun SetupScreen(
     profileManager: ProfileManager,
     onSetupComplete: () -> Unit
 ) {
-    // إدخال الحالة داخل State حتى يعاد رسم الشاشة عند تغيير قيمتها
-    var isDeviceOwner by remember { mutableStateOf(profileManager.isDeviceOwner()) }
     var hasProfile by remember { mutableStateOf(profileManager.hasWorkProfile()) }
 
-    // إعادة الفحص عند دخول الشاشة
-    fun refreshStatus() {
-        isDeviceOwner = profileManager.isDeviceOwner()
+    // مشغل الواجهة الخاصة بإعداد Work Profile المعيارية من نظام Android
+    val setupLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
         hasProfile = profileManager.hasWorkProfile()
+        if (result.resultCode == Activity.RESULT_OK || hasProfile) {
+            onSetupComplete()
+        }
     }
 
-    LaunchedEffect(isDeviceOwner, hasProfile) {
-        if (isDeviceOwner && hasProfile) onSetupComplete()
+    LaunchedEffect(hasProfile) {
+        if (hasProfile) {
+            onSetupComplete()
+        }
     }
 
     Column(
@@ -65,63 +71,31 @@ fun SetupScreen(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("• Device Owner: ${if (isDeviceOwner) "✅" else "❌"}")
-                Text("• Work Profile: ${if (hasProfile) "✅" else "❌"}")
+                Text("• Work Profile: ${if (hasProfile) "✅ مفعل" else "❌ غير مفعل"}")
             }
         }
 
         Spacer(Modifier.height(24.dp))
 
-        if (!isDeviceOwner) {
+        if (!hasProfile) {
             Text(
-                text = "الخطوة 1: فعّل التطبيق كـ Device Owner",
+                text = "إنشاء بيئة عمل معزولة",
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "نفّذ الأمر التالي عبر ADB على الكمبيوتر:",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(Modifier.height(8.dp))
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = androidx.compose.material3.CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
-                )
-            ) {
-                Text(
-                    text = "adb shell dpm set-device-owner\ncom.example.appcloner/.admin.DeviceAdmin",
-                    modifier = Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = FontFamily.Monospace
-                )
-            }
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = { refreshStatus() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("تحقق من الحالة")
-            }
-        } else if (!hasProfile) {
-            Text(
-                text = "الخطوة 2: أنشئ Work Profile",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "سيتم إنشاء بيئة عمل معزولة على جهازك.",
+                text = "اضغط على الزر أدناه لبدء إنشاء Work Profile مباشرة عبر النظام وبدون كمبيوتر.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(16.dp))
             Button(
-                onClick = { 
-                    /* profileManager.createWorkProfile() */ 
-                    refreshStatus()
+                onClick = {
+                    val intent = profileManager.createWorkProfileIntent()
+                    setupLauncher.launch(intent)
                 },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("إنشاء البيئة المعزولة")
+                Text("إنشاء البيئة المعزولة الآن")
             }
         }
 
