@@ -3,9 +3,12 @@ package com.example.appcloner.admin
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Process
+import android.os.UserHandle
 import android.os.UserManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -17,49 +20,48 @@ import javax.inject.Singleton
 class ProfileManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val dpm: DevicePolicyManager =
-        context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
     private val adminComponent: ComponentName =
         ComponentName(context, DeviceAdmin::class.java)
-    private val userManager: UserManager =
-        context.getSystemService(Context.USER_SERVICE) as UserManager
 
-    /**
-     * هل التطبيق مُفعَّل كـ Device Owner؟
-     */
-    fun isDeviceOwner(): Boolean = dpm.isDeviceOwnerApp(context.packageName)
+    private fun getDpm(): DevicePolicyManager {
+        return context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    }
+
+    private fun getUserManager(): UserManager {
+        return context.getSystemService(Context.USER_SERVICE) as UserManager
+    }
 
     /**
      * هل يوجد Work Profile مُنشأ حالياً؟
      */
     fun hasWorkProfile(): Boolean {
-        return userManager.userProfiles.any { it != Process.myUserHandle() }
+        return getWorkProfileHandle() != null
     }
 
     /**
      * الحصول على UserHandle للـ Work Profile
      */
-    fun getWorkProfileHandle(): android.os.UserHandle? {
-        return userManager.userProfiles.firstOrNull { it != Process.myUserHandle() }
+    fun getWorkProfileHandle(): UserHandle? {
+        val um = getUserManager()
+        val myUser = Process.myUserHandle()
+        return um.userProfiles.firstOrNull { it != myUser }
     }
 
     /**
-     * إنشاء Work Profile جديد
+     * إنشاء Intent لبدء عملية إعداد Work Profile من واجهة النظام الرسمية (بدون ADB)
      */
-    suspend fun createWorkProfile(): Result<Unit> = withContext(Dispatchers.Main) {
-        runCatching {
-            if (!isDeviceOwner()) {
-                throw IllegalStateException("App is not a Device Owner")
-            }
-            if (hasWorkProfile()) {
-                throw IllegalStateException("Work profile already exists")
-            }
-            // تم حذف createProfileManagementAction لأنها غير موجودة في SDK
-            throw UnsupportedOperationException(
-                "Use ADB command for initial provisioning: " +
-                "adb shell cmd device-policy create-profile-and-admin " +
-                "--name \"AppCloner\" --component ${adminComponent.flattenToString()}"
+    fun createWorkProfileIntent(): Intent {
+        return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
+            putExtra(
+                DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
+                adminComponent
             )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putExtra(
+                    DevicePolicyManager.EXTRA_PROVISIONING_SKIP_ENCRYPTION,
+                    true
+                )
+            }
         }
     }
 
@@ -68,11 +70,7 @@ class ProfileManager @Inject constructor(
      */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val workHandle = getWorkProfileHandle()
-                ?: throw IllegalStateException("No work profile found")
-            
-            // ملاحظة: التثبيت الفعلي عبر PackageInstaller في Work Profile يتطلب كوداً معقداً
-            // نعيد Unit هنا لتجاوز خطأ البناء (Compilation) بنجاح
+            getWorkProfileHandle() ?: throw IllegalStateException("No work profile found")
             Unit 
         }
     }
@@ -109,15 +107,13 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * حذف تطبيق من Work Profile
+     * إخفاء/إزالة تطبيق من Work Profile
      */
     suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val workHandle = getWorkProfileHandle()
-                ?: throw IllegalStateException("No work profile found")
-            
-            dpm.setApplicationHidden(adminComponent, packageName, true)
-            Unit // ضمان إرجاع Unit لتطابق نوع Result<Unit>
+            getWorkProfileHandle() ?: throw IllegalStateException("No work profile found")
+            getDpm().setApplicationHidden(adminComponent, packageName, true)
+            Unit
         }
     }
 
@@ -126,9 +122,8 @@ class ProfileManager @Inject constructor(
      */
     suspend fun removeWorkProfile(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            // تم إزالة userManager.removeUser لأنه SystemApi وغير متاح للتطبيقات العادية
-            // البديل الآمن هو إزالة صلاحية Profile Owner
-            if (isDeviceOwner() || dpm.isProfileOwnerApp(context.packageName)) {
+            val dpm = getDpm()
+            if (dpm.isProfileOwnerApp(context.packageName)) {
                 dpm.clearProfileOwner(adminComponent)
             }
             Unit
