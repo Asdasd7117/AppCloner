@@ -66,46 +66,56 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تثبيت/تفعيل تطبيق داخل Work Profile مباشرة
+     * تثبيت/تفعيل تطبيق داخل Work Profile
      */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            getWorkProfileHandle()
-                ?: throw IllegalStateException("No work profile found")
-
+            getWorkProfileHandle() ?: throw IllegalStateException("No work profile found")
             val dpm = getDpm()
-
-            // 1. إظهار التطبيق في حال كان مخفياً
             dpm.setApplicationHidden(adminComponent, packageName, false)
-
-            // 2. تمكين التطبيق إذا كان موجوداً كـ System App داخل البروفايل
-            try {
-                dpm.enableSystemApp(adminComponent, packageName)
-            } catch (e: Exception) {
-                // ليس تطبيق نظام
-            }
-
-            // 3. تثبيت/تفعيل الحزمة للمستخدم في Work Profile
+            
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    dpm.installExistingPackage(adminComponent, packageName)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+                dpm.installExistingPackage(adminComponent, packageName)
+            } else {
+                dpm.enableSystemApp(adminComponent, packageName)
             }
             Unit
         }
     }
 
     /**
-     * تشغيل تطبيق داخل Work Profile مباشرة بدون توجيه متجر Play Store
+     * تشغيل تطبيق داخل Work Profile
+     * (إذا لم يكن منسوخاً بعد، سيتم نسخه فوراً في نفس اللحظة ثم فتحه)
      */
     fun launchAppInWorkProfile(packageName: String): Boolean {
         val workHandle = getWorkProfileHandle() ?: return false
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
 
-        val activityList = launcherApps.getActivityList(packageName, workHandle)
-        val activityInfo = activityList.firstOrNull() ?: return false
+        var activityList = launcherApps.getActivityList(packageName, workHandle)
+        var activityInfo = activityList.firstOrNull()
+
+        // إذا لم يكن التطبيق موجوداً داخل الـ Work Profile، نقوم بنسخه بالقوة فوراً!
+        if (activityInfo == null) {
+            try {
+                val dpm = getDpm()
+                dpm.setApplicationHidden(adminComponent, packageName, false)
+                
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    dpm.installExistingPackage(adminComponent, packageName)
+                } else {
+                    dpm.enableSystemApp(adminComponent, packageName)
+                }
+                
+                // جلب الواجهة مرة أخرى بعد عملية النسخ
+                activityList = launcherApps.getActivityList(packageName, workHandle)
+                activityInfo = activityList.firstOrNull()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // إذا استمر في كونه null (التطبيق غير مدعوم أو لا يمتلك واجهة)
+        if (activityInfo == null) return false
 
         return try {
             launcherApps.startMainActivity(
