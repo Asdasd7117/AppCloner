@@ -41,5 +41,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- مستقبل البث لتنفيذ أوامر التثبيت والإزالة داخل بيئة العمل -->
+        <receiver
+            android:name=".admin.WorkProfileReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.example.appcloner.ACTION_INSTALL_APP" />
+                <action android:name="com.example.appcloner.ACTION_UNINSTALL_APP" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>
