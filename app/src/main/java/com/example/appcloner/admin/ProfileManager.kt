@@ -82,10 +82,10 @@ class ProfileManager @Inject constructor(
             try {
                 dpm.enableSystemApp(adminComponent, packageName)
             } catch (e: Exception) {
-                // ليس تطبيق نظام، ننتقل للطريقة المباشرة عبر LauncherApps / PackageInstaller
+                // ليس تطبيق نظام
             }
 
-            // 3. تثبيت/تفعيل الحزمة للمستخدم في Work Profile عبر Command أو PackageInstaller
+            // 3. تثبيت/تفعيل الحزمة للمستخدم في Work Profile
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 try {
                     dpm.installExistingPackage(adminComponent, packageName)
@@ -116,7 +116,6 @@ class ProfileManager @Inject constructor(
             )
             true
         } else {
-            // فتح صفحة التطبيق داخل متجر Google Play الخاص بالـ Work Profile لنسخه بنقرة واحدة
             try {
                 val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$packageName")).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -124,9 +123,8 @@ class ProfileManager @Inject constructor(
                 context.startActivity(intent)
                 true
             } catch (e: Exception) {
-                e.printStackTrace Box@{
-                    return false
-                }
+                e.printStackTrace()
+                false
             }
         }
     }
