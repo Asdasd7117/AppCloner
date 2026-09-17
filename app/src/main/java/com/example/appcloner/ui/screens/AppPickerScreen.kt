@@ -1,9 +1,13 @@
 package com.example.appcloner.ui.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,7 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.appcloner.ui.viewmodel.AppPickerViewModel
 
@@ -40,7 +46,7 @@ fun AppPickerScreen(
                 title = { Text("اختر تطبيقاً للنسخ") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -60,11 +66,13 @@ fun AppPickerScreen(
                     onSearch = {},
                     active = false,
                     onActiveChange = {},
-                    leadingIcon = { Icon(Icons.Default.Search, "Search") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
                         .padding(horizontal = 8.dp)
-                ) {}
+                ) {
+                    // محتوى البحث النشط (فارغ حالياً)
+                }
             }
             items(apps, key = { it.packageName }) { app ->
                 ListItem(
@@ -72,21 +80,19 @@ fun AppPickerScreen(
                     supportingContent = { Text(app.packageName) },
                     leadingContent = {
                         app.icon?.let {
-                            androidx.compose.foundation.Image(
-                                bitmap = androidx.core.graphics.drawable.toBitmapCompat(it)
-                                    .asImageBitmap(),
+                            Image(
+                                bitmap = it.toBitmap(96, 96).asImageBitmap(),
                                 contentDescription = null,
                                 modifier = Modifier
                                     .padding(4.dp)
-                                    .androidx.compose.foundation.layout.size(40.dp)
+                                    .size(40.dp)
                             )
                         }
                     },
-                    modifier = Modifier
-                        .androidx.compose.foundation.clickable {
-                            viewModel.addApp(app.packageName)
-                            onBack()
-                        }
+                    modifier = Modifier.clickable {
+                        viewModel.addApp(app.packageName)
+                        onBack()
+                    }
                 )
             }
         }
