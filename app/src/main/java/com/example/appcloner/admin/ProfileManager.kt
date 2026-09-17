@@ -115,6 +115,8 @@ class ProfileManager @Inject constructor(
             } else {
                 dpm.enableSystemApp(adminComponent, packageName)
             }
+
+            // إرجاع Unit صريح لضمان إرجاع Result<Unit>
             Unit
         }
     }
@@ -197,6 +199,9 @@ class ProfileManager @Inject constructor(
                 }
                 val dpm = getDpm()
                 dpm.setApplicationHidden(adminComponent, packageName, true)
+
+                // إرجاع Unit صريح لضمان إرجاع Result<Unit>
+                Unit
             }
         }
 
