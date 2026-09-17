@@ -20,7 +20,7 @@ import javax.inject.Singleton
 class ProfileManager @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val adminComponent: ComponentName =
+    val adminComponent: ComponentName =
         ComponentName(context, DeviceAdmin::class.java)
 
     private fun getDpm(): DevicePolicyManager {
@@ -31,16 +31,32 @@ class ProfileManager @Inject constructor(
         return context.getSystemService(Context.USER_SERVICE) as UserManager
     }
 
+    /**
+     * التحقق مما إذا كان التطبيق محدد كـ Device Owner على الجهاز
+     */
+    fun isDeviceOwner(): Boolean {
+        return getDpm().isDeviceOwnerApp(context.packageName)
+    }
+
+    /**
+     * هل يوجد Work Profile مُنشأ حالياً؟
+     */
     fun hasWorkProfile(): Boolean {
         return getWorkProfileHandle() != null
     }
 
+    /**
+     * الحصول على UserHandle للـ Work Profile
+     */
     fun getWorkProfileHandle(): UserHandle? {
         val um = getUserManager()
         val myUser = Process.myUserHandle()
         return um.userProfiles.firstOrNull { it != myUser }
     }
 
+    /**
+     * إنشاء Intent لبدء عملية إعداد Work Profile من واجهة النظام الرسمية
+     */
     fun createWorkProfileIntent(): Intent {
         return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
             putExtra(
@@ -56,12 +72,23 @@ class ProfileManager @Inject constructor(
         }
     }
 
+    /**
+     * تثبيت/تفعيل تطبيق داخل Work Profile
+     */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            getWorkProfileHandle() ?: throw IllegalStateException("لم يتم العثور على Work Profile")
             val dpm = getDpm()
-            dpm.setApplicationHidden(adminComponent, packageName, false)
-            
+            val isOwner = dpm.isDeviceOwnerApp(context.packageName) || dpm.isProfileOwnerApp(context.packageName)
+            if (!isOwner && getWorkProfileHandle() == null) {
+                throw IllegalStateException("التطبيق لا يملك صلاحية Device Owner أو Profile Owner")
+            }
+
+            try {
+                dpm.setApplicationHidden(adminComponent, packageName, false)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                 dpm.installExistingPackage(adminComponent, packageName)
             } else {
@@ -72,16 +99,16 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تشغيل التطبيق وإرجاع نتيجة تفصيلية أو سبب الفشل الدقيق
+     * تشغيل تطبيق داخل Work Profile أو إرجاع نتيجة الخطأ للواجهة
      */
     fun launchAppInWorkProfile(packageName: String): Result<Unit> {
         val workHandle = getWorkProfileHandle()
-            ?: return Result.failure(Exception("خطأ: لم يتم إنشاء البيئة المعزولة (Work Profile) بعد."))
+        val targetHandle = workHandle ?: Process.myUserHandle()
 
         val dpm = getDpm()
         var lastException: Exception? = null
 
-        // محاولة تثبيت/تمكين الحزمة
+        // محاولة إظهار وتثبيت التطبيق داخل البيئة المعزولة
         try {
             dpm.setApplicationHidden(adminComponent, packageName, false)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -94,27 +121,27 @@ class ProfileManager @Inject constructor(
         }
 
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
-        var activityList = launcherApps.getActivityList(packageName, workHandle)
+        var activityList = launcherApps.getActivityList(packageName, targetHandle)
 
-        // محاولة إعادة الفحص في حال استغرق النظام وقتاً
+        // محاولة إعادة الفحص في حال استغرق النظام بعض الوقت لإتاحة التطبيق
         var attempts = 0
         while (activityList.isEmpty() && attempts < 3) {
             try { Thread.sleep(200) } catch (_: Exception) {}
-            activityList = launcherApps.getActivityList(packageName, workHandle)
+            activityList = launcherApps.getActivityList(packageName, targetHandle)
             attempts++
         }
 
         val activityInfo = activityList.firstOrNull()
             ?: return Result.failure(
                 Exception(
-                    "فشل الفتح: التطبيق غير مثبت داخل الـ Work Profile، والتطبيق الحالي لا يملك صلاحية Profile Owner داخل العزل لتثبيته تلقائياً.\nالسبب: ${lastException?.localizedMessage ?: "عدم وجود صلاحيات كافية"}"
+                    "فشل الفتح: التطبيق غير متاح داخل البيئة المعزولة.\nالسبب التقني: ${lastException?.localizedMessage ?: "عدم وجود صلاحيات Device/Profile Owner مقترنة بالبروفايل."}"
                 )
             )
 
         return try {
             launcherApps.startMainActivity(
                 activityInfo.componentName,
-                workHandle,
+                targetHandle,
                 null,
                 null
             )
@@ -124,6 +151,9 @@ class ProfileManager @Inject constructor(
         }
     }
 
+    /**
+     * إيقاف تطبيق في البيئة المعزولة
+     */
     fun stopAppInWorkProfile(packageName: String) {
         try {
             val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
@@ -133,24 +163,35 @@ class ProfileManager @Inject constructor(
         }
     }
 
+    /**
+     * إخفاء/إزالة تطبيق من البيئة المعزولة
+     */
     suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            getWorkProfileHandle() ?: throw IllegalStateException("لم يتم العثور على Work Profile")
-            getDpm().setApplicationHidden(adminComponent, packageName, true)
+            val dpm = getDpm()
+            dpm.setApplicationHidden(adminComponent, packageName, true)
             Unit
         }
     }
 
+    /**
+     * إزالة صلاحية الأدمن أو إلغاء البروفايل
+     */
     suspend fun removeWorkProfile(): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val dpm = getDpm()
             if (dpm.isProfileOwnerApp(context.packageName)) {
                 dpm.clearProfileOwner(adminComponent)
+            } else if (dpm.isDeviceOwnerApp(context.packageName)) {
+                dpm.clearDeviceOwnerApp(context.packageName)
             }
             Unit
         }
     }
 
+    /**
+     * الحصول على التطبيقات المثبتة في Work Profile
+     */
     fun getWorkProfileApps(): List<String> {
         val workHandle = getWorkProfileHandle() ?: return emptyList()
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
@@ -159,6 +200,9 @@ class ProfileManager @Inject constructor(
             .distinct()
     }
 
+    /**
+     * الحصول على جميع التطبيقات القابلة للنسخ (المثبتة في البروفايل الشخصي)
+     */
     fun getPersonalApps(): List<String> {
         val pm = context.packageManager
         return pm.getInstalledApplications(PackageManager.GET_META_DATA)
