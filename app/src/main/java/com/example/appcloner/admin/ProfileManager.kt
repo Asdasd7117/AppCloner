@@ -66,16 +66,16 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تثبيت/تفعيل تطبيق داخل Work Profile
+     * تثبيت/تفعيل تطبيق داخل Work Profile مباشرة
      */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val workHandle = getWorkProfileHandle()
+            getWorkProfileHandle()
                 ?: throw IllegalStateException("No work profile found")
 
             val dpm = getDpm()
 
-            // 1. إلغاء أي إخفاء محتمل للتطبيق
+            // 1. إظهار التطبيق في حال كان مخفياً
             dpm.setApplicationHidden(adminComponent, packageName, false)
 
             // 2. تمكين التطبيق إذا كان موجوداً كـ System App داخل البروفايل
@@ -98,16 +98,16 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تشغيل تطبيق داخل Work Profile، أو فتح متجر Play Store داخل البروفايل لتثبيته فوراً إذا لم يكن متاحاً
+     * تشغيل تطبيق داخل Work Profile مباشرة بدون توجيه متجر Play Store
      */
     fun launchAppInWorkProfile(packageName: String): Boolean {
         val workHandle = getWorkProfileHandle() ?: return false
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
 
         val activityList = launcherApps.getActivityList(packageName, workHandle)
-        val activityInfo = activityList.firstOrNull()
+        val activityInfo = activityList.firstOrNull() ?: return false
 
-        return if (activityInfo != null) {
+        return try {
             launcherApps.startMainActivity(
                 activityInfo.componentName,
                 workHandle,
@@ -115,17 +115,9 @@ class ProfileManager @Inject constructor(
                 null
             )
             true
-        } else {
-            try {
-                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$packageName")).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(intent)
-                true
-            } catch (e: Exception) {
-                e.printStackTrace()
-                false
-            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 
