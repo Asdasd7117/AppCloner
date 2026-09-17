@@ -10,8 +10,8 @@ import com.example.appcloner.data.repository.AppRepository
 import com.example.appcloner.domain.model.AppInfo
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,13 +25,13 @@ class HomeViewModel @Inject constructor(
 
     private val pm: PackageManager = context.packageManager
 
-    val clonedApps: Flow<List<AppInfo>> = repository.getClonedApps()
+    // تم التغيير إلى StateFlow لضمان عدم طلب initial في الشاشة
+    val clonedApps: StateFlow<List<AppInfo>> = repository.getClonedApps()
         .map { entities -> entities.map { it.toAppInfo() } }
-        // تم التصحيح: تحديد نوع emptyList<AppInfo>() بشكل صريح
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Lazily,
-            initialValue = emptyList<AppInfo>()
+            initialValue = emptyList()
         )
 
     fun launchApp(packageName: String) {
