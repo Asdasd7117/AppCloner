@@ -8,21 +8,22 @@ plugins {
 
 android {
     namespace = "com.example.appcloner"
-    compileSdk = 35
+    // تم التغيير إلى 34 لضمان استقرار البناء في بيئات CI/CD وتجنب أخطاء AAPT
+    compileSdk = 34
 
     defaultConfig {
         applicationId = "com.example.appcloner"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 34
         versionCode = 1
         versionName = "1.0"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true // تفعيل ضغط الموارد لتقليل حجم APK
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
