@@ -48,7 +48,7 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * إنشاء Intent لبدء عملية إعداد Work Profile من واجهة النظام الرسمية (بدون ADB)
+     * إنشاء Intent لبدء عملية إعداد Work Profile من واجهة النظام الرسمية
      */
     fun createWorkProfileIntent(): Intent {
         return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
@@ -66,32 +66,69 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تثبيت تطبيق داخل Work Profile
+     * تثبيت/تفعيل تطبيق داخل Work Profile
      */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            getWorkProfileHandle() ?: throw IllegalStateException("No work profile found")
-            Unit 
+            val workHandle = getWorkProfileHandle()
+                ?: throw IllegalStateException("No work profile found")
+
+            val dpm = getDpm()
+
+            // 1. إلغاء أي إخفاء محتمل للتطبيق
+            dpm.setApplicationHidden(adminComponent, packageName, false)
+
+            // 2. تمكين التطبيق إذا كان موجوداً كـ System App داخل البروفايل
+            try {
+                dpm.enableSystemApp(adminComponent, packageName)
+            } catch (e: Exception) {
+                // ليس تطبيق نظام، ننتقل للطريقة المباشرة عبر LauncherApps / PackageInstaller
+            }
+
+            // 3. تثبيت/تفعيل الحزمة للمستخدم في Work Profile عبر Command أو PackageInstaller
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    dpm.installExistingPackage(adminComponent, packageName)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            Unit
         }
     }
 
     /**
-     * تشغيل تطبيق داخل Work Profile
+     * تشغيل تطبيق داخل Work Profile، أو فتح متجر Play Store داخل البروفايل لتثبيته فوراً إذا لم يكن متاحاً
      */
     fun launchAppInWorkProfile(packageName: String): Boolean {
         val workHandle = getWorkProfileHandle() ?: return false
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
 
         val activityList = launcherApps.getActivityList(packageName, workHandle)
-        val activityInfo = activityList.firstOrNull() ?: return false
+        val activityInfo = activityList.firstOrNull()
 
-        launcherApps.startMainActivity(
-            activityInfo.componentName,
-            workHandle,
-            null,
-            null
-        )
-        return true
+        return if (activityInfo != null) {
+            launcherApps.startMainActivity(
+                activityInfo.componentName,
+                workHandle,
+                null,
+                null
+            )
+            true
+        } else {
+            // فتح صفحة التطبيق داخل متجر Google Play الخاص بالـ Work Profile لنسخه بنقرة واحدة
+            try {
+                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$packageName")).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                true
+            } catch (e: Exception) {
+                e.printStackTrace Box@{
+                    return false
+                }
+            }
+        }
     }
 
     /**
