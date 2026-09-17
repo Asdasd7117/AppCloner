@@ -53,6 +53,9 @@ class ProfileManager @Inject constructor(
         return getWorkProfileHandle() != null
     }
 
+    /**
+     * جلب مقبض (UserHandle) الخاص بـ Work Profile
+     */
     fun getWorkProfileHandle(): UserHandle? {
         return try {
             val userManager = getUserManager()
@@ -86,6 +89,9 @@ class ProfileManager @Inject constructor(
         }
     }
 
+    /**
+     * تثبيت وإتاحة التطبيق داخل Work Profile إما مباشرة أو عن طريق إرسال broadcast لبيئة العمل
+     */
     suspend fun installAppInWorkProfile(
         packageName: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -93,10 +99,9 @@ class ProfileManager @Inject constructor(
             val workHandle = getWorkProfileHandle()
                 ?: throw IllegalStateException("لا يوجد Work Profile مفعل.")
 
-            val dpm = getDpm()
-
-            // التأكد من تطبيق العملية
             if (isProfileOwner()) {
+                // إذا كنا نفذنا الكود من داخل بيئة العمل
+                val dpm = getDpm()
                 dpm.setApplicationHidden(adminComponent, packageName, false)
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -104,13 +109,20 @@ class ProfileManager @Inject constructor(
                 } else {
                     dpm.enableSystemApp(adminComponent, packageName)
                 }
+            } else {
+                // إذا كنا نفذنا الكود من البروفايل الرئيسي، نرسل أمر التثبيت للـ Work Profile
+                val intent = Intent(WorkProfileReceiver.ACTION_INSTALL_APP).apply {
+                    setPackage(context.packageName)
+                    putExtra("EXTRA_PACKAGE_NAME", packageName)
+                }
+                context.sendBroadcastAsUser(intent, workHandle)
             }
             Unit
         }
     }
 
     /**
-     * تشغيل التطبيق المنسوخ بأسلوب مضمون عبر Intent مباشرة مع UserHandle
+     * تشغيل التطبيق المنسوخ بأسلوب مضمون عبر LauncherApps
      */
     fun launchAppInWorkProfile(packageName: String): Boolean {
         clearError()
@@ -126,7 +138,6 @@ class ProfileManager @Inject constructor(
             val activities = launcherApps.getActivityList(packageName, workHandle)
 
             if (activities.isNotEmpty()) {
-                // التشغيل المباشر من خلال LauncherApps
                 val mainActivity = activities.first()
                 launcherApps.startMainActivity(
                     mainActivity.componentName,
@@ -137,18 +148,7 @@ class ProfileManager @Inject constructor(
                 clearError()
                 true
             } else {
-                // محاولة الفتح بفتح واجهة التطبيق داخل Work Profile عبر Intent البديل
-                val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
-                if (launchIntent != null) {
-                    val launcher = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
-                    val appActivities = launcher.getActivityList(packageName, workHandle)
-                    if (appActivities.isNotEmpty()) {
-                        launcher.startMainActivity(appActivities[0].componentName, workHandle, null, null)
-                        return true
-                    }
-                }
-                
-                setError("❌ التطبيق غير مفعل داخل Work Profile. تأكد من إضافته أولاً من داخل بيئة العمل.")
+                setError("❌ التطبيق غير مفعل داخل Work Profile. أعد إضافته مجدداً.")
                 false
             }
         } catch (e: SecurityException) {
@@ -172,12 +172,24 @@ class ProfileManager @Inject constructor(
         }
     }
 
+    /**
+     * إخفاء/حذف التطبيق من بيئة العمل
+     */
     suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                val workHandle = getWorkProfileHandle()
+                    ?: throw IllegalStateException("لا يوجد Work Profile مفعل.")
+
                 if (isProfileOwner()) {
                     val dpm = getDpm()
                     dpm.setApplicationHidden(adminComponent, packageName, true)
+                } else {
+                    val intent = Intent(WorkProfileReceiver.ACTION_UNINSTALL_APP).apply {
+                        setPackage(context.packageName)
+                        putExtra("EXTRA_PACKAGE_NAME", packageName)
+                    }
+                    context.sendBroadcastAsUser(intent, workHandle)
                 }
                 Unit
             }
