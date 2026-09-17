@@ -44,15 +44,18 @@ class AppRepository @Inject constructor(
                     label = pm.getApplicationLabel(app).toString()
                 )
             )
-            // محاولة تثبيت التطبيق في Work Profile
-            profileManager.installAppInWorkProfile(packageName)
+            // تم التصحيح: استخدام getOrThrow() لضمان إرجاع Unit وتجنب تعارض الأنواع
+            profileManager.installAppInWorkProfile(packageName).getOrThrow()
+            Unit 
         }
     }
 
     suspend fun removeApp(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            profileManager.uninstallAppFromWorkProfile(packageName)
+            // تم التصحيح: استخدام getOrThrow() لضمان إرجاع Unit وتجنب تعارض الأنواع
+            profileManager.uninstallAppFromWorkProfile(packageName).getOrThrow()
             dao.deleteByPackage(packageName)
+            Unit
         }
     }
 
