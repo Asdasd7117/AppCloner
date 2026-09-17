@@ -27,7 +27,12 @@ class HomeViewModel @Inject constructor(
 
     val clonedApps: Flow<List<AppInfo>> = repository.getClonedApps()
         .map { entities -> entities.map { it.toAppInfo() } }
-        .stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+        // تم التصحيح: تحديد نوع emptyList<AppInfo>() بشكل صريح
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Lazily,
+            initialValue = emptyList<AppInfo>()
+        )
 
     fun launchApp(packageName: String) {
         repository.launchApp(packageName)
@@ -45,9 +50,11 @@ class HomeViewModel @Inject constructor(
         val appInfo = try {
             pm.getApplicationInfo(packageName, 0)
         } catch (e: Exception) { null }
+        
         val icon: Drawable? = try {
             appInfo?.let { pm.getApplicationIcon(it) }
         } catch (e: Exception) { null }
+        
         return AppInfo(
             packageName = packageName,
             label = label,
