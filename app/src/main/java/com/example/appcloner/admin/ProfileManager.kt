@@ -12,6 +12,7 @@ import android.os.UserHandle
 import android.os.UserManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -70,54 +71,49 @@ class ProfileManager @Inject constructor(
      */
     suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            getWorkProfileHandle() ?: throw IllegalStateException("No work profile found")
             val dpm = getDpm()
             dpm.setApplicationHidden(adminComponent, packageName, false)
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                dpm.installExistingPackage(adminComponent, packageName)
+                try {
+                    dpm.installExistingPackage(adminComponent, packageName)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             } else {
-                dpm.enableSystemApp(adminComponent, packageName)
+                try {
+                    dpm.enableSystemApp(adminComponent, packageName)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
             }
             Unit
         }
     }
 
     /**
-     * تشغيل تطبيق داخل Work Profile
-     * (إذا لم يكن منسوخاً بعد، سيتم نسخه فوراً في نفس اللحظة ثم فتحه)
+     * تشغيل تطبيق داخل Work Profile مع إعادة المحاولة لتأكيد وجود الواجهة
      */
-    fun launchAppInWorkProfile(packageName: String): Boolean {
-        val workHandle = getWorkProfileHandle() ?: return false
+    suspend fun launchAppInWorkProfile(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        val workHandle = getWorkProfileHandle() ?: return@withContext false
         val launcherApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
 
-        var activityList = launcherApps.getActivityList(packageName, workHandle)
-        var activityInfo = activityList.firstOrNull()
+        // 1. محاولة تثبيت/تمكين الحزمة أولاً
+        installAppInWorkProfile(packageName)
 
-        // إذا لم يكن التطبيق موجوداً داخل الـ Work Profile، نقوم بنسخه بالقوة فوراً!
-        if (activityInfo == null) {
-            try {
-                val dpm = getDpm()
-                dpm.setApplicationHidden(adminComponent, packageName, false)
-                
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    dpm.installExistingPackage(adminComponent, packageName)
-                } else {
-                    dpm.enableSystemApp(adminComponent, packageName)
-                }
-                
-                // جلب الواجهة مرة أخرى بعد عملية النسخ
-                activityList = launcherApps.getActivityList(packageName, workHandle)
-                activityInfo = activityList.firstOrNull()
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+        // 2. البحث عن الأنشطة المتاحة (مع التكرار في حال استغرق النظام وقتاً لتسجيل التطبيق)
+        var activityList = launcherApps.getActivityList(packageName, workHandle)
+        var attempts = 0
+        while (activityList.isEmpty() && attempts < 3) {
+            delay(300) // انتظار 300 ملي ثانية لإنهاء تسجيل الحزمة
+            activityList = launcherApps.getActivityList(packageName, workHandle)
+            attempts++
         }
 
-        // إذا استمر في كونه null (التطبيق غير مدعوم أو لا يمتلك واجهة)
-        if (activityInfo == null) return false
+        val activityInfo = activityList.firstOrNull() ?: return@withContext false
 
-        return try {
+        // 3. تشغيل النشاط الرئيسي
+        return@withContext try {
             launcherApps.startMainActivity(
                 activityInfo.componentName,
                 workHandle,
