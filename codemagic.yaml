@@ -1,0 +1,28 @@
+workflows:
+  android-release:
+    name: Android Release Build
+
+    environment:
+      vars:
+        GRADLE_OPTS: "-Dorg.gradle.daemon=false -Dorg.gradle.parallel=true"
+
+    scripts:
+      - name: Grant permissions
+        script: chmod +x ./gradlew
+
+      - name: Clean project
+        script: ./gradlew clean
+
+      - name: Build Release APK
+        script: |
+          ./gradlew assembleRelease \
+            --warning-mode none \
+            --console=plain
+
+    artifacts:
+      - app/build/outputs/apk/release/*.apk
+
+    publishing:
+      email:
+        recipients:
+          - alywm100@gmail.com
