@@ -1,106 +1,107 @@
 package com.example.appcloner.ui.screens
 
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SearchBar
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
-import androidx.core.graphics.drawable.toBitmap
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.appcloner.ui.viewmodel.AppPickerViewModel
-import kotlinx.coroutines.launch
+import com.google.accompanist.drawablepainter.rememberDrawablePainter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppPickerScreen(
-    onBack: () -> Unit,
-    viewModel: AppPickerViewModel = hiltViewModel()
+    viewModel: AppPickerViewModel,
+    onBack: () -> Unit
 ) {
-    val apps by viewModel.availableApps.collectAsState()
-    val query by viewModel.searchQuery.collectAsState()
-    val coroutineScope = rememberCoroutineScope()
+    val searchQuery by viewModel.searchQuery.collectAsState()
+    val availableApps by viewModel.availableApps.collectAsState()
+
+    val filteredApps = remember(searchQuery, availableApps) {
+        if (searchQuery.isBlank()) {
+            availableApps
+        } else {
+            availableApps.filter {
+                it.label.contains(searchQuery, ignoreCase = true) ||
+                        it.packageName.contains(searchQuery, ignoreCase = true)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("اختر تطبيقاً للنسخ") },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
+                    TextButton(onClick = onBack) {
+                        Text("رجوع")
                     }
                 }
             )
         }
-    ) { padding ->
-        LazyColumn(
+    ) { paddingValues ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding),
-            contentPadding = PaddingValues(8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(paddingValues)
+                .padding(16.dp)
         ) {
-            item {
-                SearchBar(
-                    query = query,
-                    onQueryChange = viewModel::onQueryChange,
-                    onSearch = {},
-                    active = false,
-                    onActiveChange = {},
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "بحث") },
-                    placeholder = { Text("ابحث عن تطبيق...") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp)
-                ) {
-                    // محتوى البحث
-                }
-            }
-            items(apps, key = { it.packageName }) { app ->
-                ListItem(
-                    headlineContent = { Text(app.label) },
-                    supportingContent = { Text(app.packageName) },
-                    leadingContent = {
-                        app.icon?.let {
-                            Image(
-                                bitmap = it.toBitmap(96, 96).asImageBitmap(),
-                                contentDescription = null,
-                                modifier = Modifier
-                                    .padding(4.dp)
-                                    .size(40.dp)
-                            )
-                        }
-                    },
-                    modifier = Modifier.clickable {
-                        coroutineScope.launch {
-                            // إضافة التطبيق وتثبيته في بيئة العمل قبل الخروج
-                            viewModel.addApp(app.packageName)
-                            onBack()
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { viewModel.onQueryChange(it) },
+                label = { Text("ابحث عن تطبيق...") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(filteredApps) { app ->
+                    Card(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            app.icon?.let { drawable ->
+                                Image(
+                                    painter = rememberDrawablePainter(drawable),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = app.label,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Text(
+                                    text = app.packageName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Button(onClick = {
+                                viewModel.addApp(app.packageName) {
+                                    onBack()
+                                }
+                            }) {
+                                Text("نسخ")
+                            }
                         }
                     }
-                )
+                }
             }
         }
     }
