@@ -16,7 +16,7 @@ class WorkProfileReceiver : BroadcastReceiver() {
         val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
         val adminComponent = ComponentName(context, DeviceAdmin::class.java)
 
-        // التأكد من أن النسخة الحالية تعمل كـ Profile Owner داخل بيئة العمل
+        // تنفذ فقط إذا كانت هذه النسخة هي الـ Profile Owner داخل الـ Work Profile
         if (!dpm.isProfileOwnerApp(context.packageName)) return
 
         when (action) {
