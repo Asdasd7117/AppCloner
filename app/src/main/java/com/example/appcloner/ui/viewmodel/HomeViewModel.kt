@@ -27,9 +27,6 @@ class HomeViewModel @Inject constructor(
         loadClonedApps()
     }
 
-    /**
-     * إعادة تحميل التطبيقات المثبتة داخل Work Profile مع التنفيذ في IO Dispatcher
-     */
     fun loadClonedApps() {
         viewModelScope.launch(Dispatchers.IO) {
             val apps = repository.getClonedApps()
@@ -39,34 +36,24 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    /**
-     * تشغيل التطبيق المنسوخ مع معالجة الأخطاء
-     */
     fun launchApp(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val success = repository.launchApp(packageName)
             if (!success) {
-                val error = repository.getLastError()
+                val err = repository.getLastError()
                 withContext(Dispatchers.Main) {
-                    _errorMessage.value = error.ifEmpty { "فشل تشغيل التطبيق." }
+                    _errorMessage.value = if (err.isEmpty()) "فشل تشغيل التطبيق." else err
                 }
             }
         }
     }
 
-    /**
-     * إيقاف العمليات في الخلفية للتطبيق
-     */
     fun stopApp(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val resultMessage = repository.stopApp(packageName)
-            // يمكن الاستفادة من الرسالة إذا كنت تعرض Toast أو SnackBar
+            repository.stopApp(packageName)
         }
     }
 
-    /**
-     * إزالة/إخفاء التطبيق المنسوخ وإعادة جلب القائمة
-     */
     fun removeApp(packageName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.uninstallApp(packageName)
