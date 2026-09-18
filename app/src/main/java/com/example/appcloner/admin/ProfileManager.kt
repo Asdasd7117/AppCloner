@@ -13,7 +13,6 @@ import android.os.UserHandle
 import android.os.UserManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,14 +37,21 @@ class ProfileManager @Inject constructor(
         lastError = ""
     }
 
-    private fun getDpm(): DevicePolicyManager =
-        context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    private fun getDpm(): DevicePolicyManager {
+        return context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+    }
 
-    private fun getUserManager(): UserManager =
-        context.getSystemService(Context.USER_SERVICE) as UserManager
+    private fun getUserManager(): UserManager {
+        return context.getSystemService(Context.USER_SERVICE) as UserManager
+    }
 
-    private fun getLauncherApps(): LauncherApps =
-        context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+    private fun getLauncherApps(): LauncherApps {
+        return context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
+    }
+
+    fun hasWorkProfile(): Boolean {
+        return getWorkProfileHandle() != null
+    }
 
     fun getWorkProfileHandle(): UserHandle? {
         return try {
@@ -65,56 +71,54 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * تثبيت التطبيق بإرسال بث لنسخة الـ Work Profile إذا لم نكن نحن الـ Owner
-     */
-    suspend fun installAppInWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
+    fun createWorkProfileIntent(): Intent {
+        return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
+            putExtra(
+                DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
+                adminComponent
+            )
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                putExtra(
+                    DevicePolicyManager.EXTRA_PROVISIONING_SKIP_ENCRYPTION,
+                    true
+                )
+            }
+        }
+    }
+
+    suspend fun installAppInWorkProfile(
+        packageName: String
+    ): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             val workHandle = getWorkProfileHandle()
                 ?: throw IllegalStateException("لا يوجد Work Profile مفعل.")
 
             if (isProfileOwner()) {
-                // إذا كنا نعمل من داخل الـ Work Profile مباشرة
                 val dpm = getDpm()
                 dpm.setApplicationHidden(adminComponent, packageName, false)
+
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
                     dpm.installExistingPackage(adminComponent, packageName)
                 } else {
                     dpm.enableSystemApp(adminComponent, packageName)
                 }
-            } else {
-                // إذا كنا في البروفايل الشخصي، نرسل إشارة للنسخة الموجودة في الـ Work Profile
-                val intent = Intent(WorkProfileReceiver.ACTION_INSTALL_APP).apply {
-                    setPackage(context.packageName)
-                    putExtra("EXTRA_PACKAGE_NAME", packageName)
-                }
-                context.sendBroadcastAsUser(intent, workHandle)
-                
-                // انتظار بسيط للتأكد من إتمام التثبيت قبل العودة
-                delay(1000)
             }
             Unit
         }
     }
 
-    suspend fun launchAppInWorkProfile(packageName: String): Boolean = withContext(Dispatchers.IO) {
+    fun launchAppInWorkProfile(packageName: String): Boolean {
         clearError()
-        try {
+
+        return try {
             val workHandle = getWorkProfileHandle()
             if (workHandle == null) {
-                setError("❌ لا يوجد Work Profile مفعل.")
-                return@withContext false
+                setError("❌ فشل الفتح: لا يوجد Work Profile مفعل.")
+                return false
             }
 
             val launcherApps = getLauncherApps()
-            var activities = launcherApps.getActivityList(packageName, workHandle)
-
-            if (activities.isEmpty()) {
-                // محاولة تثبيت إضافية فورية
-                installAppInWorkProfile(packageName)
-                delay(800)
-                activities = launcherApps.getActivityList(packageName, workHandle)
-            }
+            val activities = launcherApps.getActivityList(packageName, workHandle)
 
             if (activities.isNotEmpty()) {
                 val mainActivity = activities.first()
@@ -127,40 +131,37 @@ class ProfileManager @Inject constructor(
                 clearError()
                 true
             } else {
-                setError("❌ فشل إظهار التطبيق داخل Work Profile.")
+                setError("❌ التطبيق غير متوفر داخل Work Profile.")
                 false
             }
         } catch (e: Exception) {
-            setError("❌ خطأ أثناء التشغيل: ${e.message}")
+            setError("❌ خطأ أثناء تشغيل التطبيق: ${e.message ?: e.javaClass.simpleName}")
             false
         }
     }
 
     fun stopAppInWorkProfile(packageName: String): String {
         return try {
-            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            am.killBackgroundProcesses(packageName)
-            "✅ تم الإيقاف"
+            if (getWorkProfileHandle() == null) return "❌ لا يوجد Work Profile."
+
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            activityManager.killBackgroundProcesses(packageName)
+            "✅ تم إرسال طلب إيقاف التطبيق."
         } catch (e: Exception) {
-            "❌ فشل الإيقاف: ${e.message}"
+            "❌ فشل إيقاف التطبيق: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 
-    suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> = withContext(Dispatchers.IO) {
-        runCatching {
-            val workHandle = getWorkProfileHandle() ?: return@runCatching
-            if (isProfileOwner()) {
-                getDpm().setApplicationHidden(adminComponent, packageName, true)
-            } else {
-                val intent = Intent(WorkProfileReceiver.ACTION_UNINSTALL_APP).apply {
-                    setPackage(context.packageName)
-                    putExtra("EXTRA_PACKAGE_NAME", packageName)
+    suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                if (isProfileOwner()) {
+                    val dpm = getDpm()
+                    dpm.setApplicationHidden(adminComponent, packageName, true)
                 }
-                context.sendBroadcastAsUser(intent, workHandle)
+                Unit
             }
-            Unit
         }
-    }
 
     fun getWorkProfileApps(): List<String> {
         return try {
@@ -168,7 +169,6 @@ class ProfileManager @Inject constructor(
             getLauncherApps()
                 .getActivityList(null, workHandle)
                 .map { it.applicationInfo.packageName }
-                .filter { it != context.packageName }
                 .distinct()
         } catch (e: Exception) {
             emptyList()
@@ -177,10 +177,11 @@ class ProfileManager @Inject constructor(
 
     fun getPersonalApps(): List<String> {
         return try {
-            val pm = context.packageManager
-            pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            val packageManager = context.packageManager
+            packageManager
+                .getInstalledApplications(PackageManager.GET_META_DATA)
                 .filter { app ->
-                    pm.getLaunchIntentForPackage(app.packageName) != null &&
+                    packageManager.getLaunchIntentForPackage(app.packageName) != null &&
                             app.packageName != context.packageName &&
                             !app.packageName.startsWith("android.") &&
                             !app.packageName.startsWith("com.android.")
