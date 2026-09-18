@@ -9,19 +9,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.appcloner.admin.ProfileManager
+import com.example.appcloner.ui.viewmodel.SetupViewModel
 
 @Composable
 fun SetupScreen(
-    profileManager: ProfileManager,
+    viewModel: SetupViewModel,
     onSetupComplete: () -> Unit
 ) {
-    val hasWorkProfile = remember { profileManager.hasWorkProfile() }
+    val hasWorkProfile by viewModel.hasWorkProfile.collectAsState()
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK || profileManager.hasWorkProfile()) {
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.checkWorkProfile()
             onSetupComplete()
         }
     }
@@ -50,7 +51,7 @@ fun SetupScreen(
 
                 Button(
                     onClick = {
-                        val intent = profileManager.createWorkProfileIntent()
+                        val intent = viewModel.createWorkProfileIntent()
                         launcher.launch(intent)
                     }
                 ) {
