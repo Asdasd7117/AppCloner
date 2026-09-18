@@ -1,43 +1,45 @@
 package com.example.appcloner.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.example.appcloner.ui.screens.HomeScreen
+import androidx.navigation.compose.rememberNavController
+import com.example.appcloner.admin.ProfileManager
 import com.example.appcloner.ui.screens.AppPickerScreen
-import com.example.appcloner.ui.viewmodel.HomeViewModel
-import com.example.appcloner.ui.viewmodel.AppPickerViewModel
+import com.example.appcloner.ui.screens.HomeScreen
+import com.example.appcloner.ui.screens.SetupScreen
 
-sealed class Screen(val route: String) {
-    object Home : Screen("home")
-    object AppPicker : Screen("app_picker")
+object Routes {
+    const val SETUP = "setup"
+    const val HOME = "home"
+    const val PICKER = "picker"
 }
 
 @Composable
-fun NavGraph(navController: NavHostController) {
-    NavHost(
-        navController = navController,
-        startDestination = Screen.Home.route
-    ) {
-        composable(Screen.Home.route) {
-            val homeViewModel: HomeViewModel = hiltViewModel()
-            HomeScreen(
-                viewModel = homeViewModel,
-                onNavigateToPicker = {
-                    navController.navigate(Screen.AppPicker.route)
+fun NavGraph(profileManager: ProfileManager) {
+    val navController = rememberNavController()
+
+    NavHost(navController = navController, startDestination = Routes.SETUP) {
+        composable(Routes.SETUP) {
+            SetupScreen(
+                profileManager = profileManager,
+                onSetupComplete = { 
+                    navController.navigate(Routes.HOME) {
+                        popUpTo(Routes.SETUP) { inclusive = true }
+                    }
                 }
             )
         }
-
-        composable(Screen.AppPicker.route) {
-            val pickerViewModel: AppPickerViewModel = hiltViewModel()
+        composable(Routes.HOME) {
+            HomeScreen(
+                onAddApp = { navController.navigate(Routes.PICKER) },
+                onSettings = { navController.navigate(Routes.SETUP) }
+            )
+        }
+        composable(Routes.PICKER) {
+            // تم تصحيح المعاملات هنا لتطابق تعريف الدالة
             AppPickerScreen(
-                viewModel = pickerViewModel,
-                onAppSelected = {
-                    navController.popBackStack()
-                }
+                onBack = { navController.popBackStack() }
             )
         }
     }
