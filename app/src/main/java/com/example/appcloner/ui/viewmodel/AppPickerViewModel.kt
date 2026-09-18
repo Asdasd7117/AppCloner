@@ -36,6 +36,10 @@ class AppPickerViewModel @Inject constructor(
     private val _availableApps = MutableStateFlow<List<AppInfo>>(emptyList())
     val availableApps: StateFlow<List<AppInfo>> = _availableApps.asStateFlow()
 
+    // حالة لمتابعة التطبيق الجاري نسخه
+    private val _loadingPackage = MutableStateFlow<String?>(null)
+    val loadingPackage: StateFlow<String?> = _loadingPackage.asStateFlow()
+
     init {
         loadApps()
     }
@@ -90,8 +94,14 @@ class AppPickerViewModel @Inject constructor(
 
     fun addApp(packageName: String, onComplete: () -> Unit) {
         viewModelScope.launch {
-            repository.installApp(packageName)
-            onComplete()
+            _loadingPackage.value = packageName
+            try {
+                // تثبيت التطبيق وانتظار النتيجة
+                repository.installApp(packageName)
+            } finally {
+                _loadingPackage.value = null
+                onComplete()
+            }
         }
     }
 }
