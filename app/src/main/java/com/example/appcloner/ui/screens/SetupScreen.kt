@@ -8,29 +8,26 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.appcloner.ui.viewmodel.SetupViewModel
+import com.example.appcloner.admin.ProfileManager
 
 @Composable
 fun SetupScreen(
-    viewModel: SetupViewModel,
+    profileManager: ProfileManager,
     onSetupComplete: () -> Unit
 ) {
-    val context = LocalContext.current
-    val hasWorkProfileState by viewModel.hasWorkProfile.collectAsState()
+    val hasWorkProfile = remember { profileManager.hasWorkProfile() }
 
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        if (result.resultCode == Activity.RESULT_OK) {
-            viewModel.checkWorkProfile()
+        if (result.resultCode == Activity.RESULT_OK || profileManager.hasWorkProfile()) {
             onSetupComplete()
         }
     }
 
-    LaunchedEffect(hasWorkProfileState) {
-        if (hasWorkProfileState) {
+    LaunchedEffect(hasWorkProfile) {
+        if (hasWorkProfile) {
             onSetupComplete()
         }
     }
@@ -53,7 +50,7 @@ fun SetupScreen(
 
                 Button(
                     onClick = {
-                        val intent = viewModel.createWorkProfileIntent()
+                        val intent = profileManager.createWorkProfileIntent()
                         launcher.launch(intent)
                     }
                 ) {
