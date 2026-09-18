@@ -13,13 +13,15 @@ import javax.inject.Inject
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
-    @Inject lateinit var profileManager: ProfileManager
+    @Inject 
+    lateinit var profileManager: ProfileManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             AppClonerTheme {
+                // تم تمرير المعاملات الصحيحة هنا
                 NavGraph(profileManager = profileManager)
             }
         }
