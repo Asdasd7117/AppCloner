@@ -24,12 +24,14 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.appcloner.ui.viewmodel.AppPickerViewModel
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -39,6 +41,7 @@ fun AppPickerScreen(
 ) {
     val apps by viewModel.availableApps.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -46,7 +49,7 @@ fun AppPickerScreen(
                 title = { Text("اختر تطبيقاً للنسخ") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "رجوع")
                     }
                 }
             )
@@ -66,12 +69,13 @@ fun AppPickerScreen(
                     onSearch = {},
                     active = false,
                     onActiveChange = {},
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "Search") },
+                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "بحث") },
+                    placeholder = { Text("ابحث عن تطبيق...") },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 8.dp)
                 ) {
-                    // محتوى البحث النشط (فارغ حالياً)
+                    // محتوى البحث
                 }
             }
             items(apps, key = { it.packageName }) { app ->
@@ -90,8 +94,11 @@ fun AppPickerScreen(
                         }
                     },
                     modifier = Modifier.clickable {
-                        viewModel.addApp(app.packageName)
-                        onBack()
+                        coroutineScope.launch {
+                            // إضافة التطبيق وتثبيته في بيئة العمل قبل الخروج
+                            viewModel.addApp(app.packageName)
+                            onBack()
+                        }
                     }
                 )
             }
