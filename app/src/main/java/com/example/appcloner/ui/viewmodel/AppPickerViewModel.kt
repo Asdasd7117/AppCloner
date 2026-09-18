@@ -1,7 +1,9 @@
 package com.example.appcloner.ui.viewmodel
 
 import android.content.Context
-import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,7 +21,7 @@ import javax.inject.Inject
 data class AppInfo(
     val packageName: String,
     val label: String,
-    val icon: Drawable? = null
+    val iconBitmap: Bitmap? = null
 )
 
 @HiltViewModel
@@ -50,10 +52,11 @@ class AppPickerViewModel @Inject constructor(
             val appsList = packageNames.mapNotNull { pkgName ->
                 try {
                     val appInfo = pm.getApplicationInfo(pkgName, 0)
+                    val iconDrawable = pm.getApplicationIcon(appInfo)
                     AppInfo(
                         packageName = pkgName,
                         label = pm.getApplicationLabel(appInfo).toString(),
-                        icon = pm.getApplicationIcon(appInfo)
+                        iconBitmap = drawableToBitmap(iconDrawable)
                     )
                 } catch (e: Exception) {
                     null
@@ -64,6 +67,25 @@ class AppPickerViewModel @Inject constructor(
                 _availableApps.value = appsList
             }
         }
+    }
+
+    private fun drawableToBitmap(drawable: Drawable): Bitmap {
+        if (drawable is BitmapDrawable && drawable.bitmap != null) {
+            return drawable.bitmap
+        }
+        val bitmap = if (drawable.intrinsicWidth <= 0 || drawable.intrinsicHeight <= 0) {
+            Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        } else {
+            Bitmap.createBitmap(
+                drawable.intrinsicWidth,
+                drawable.intrinsicHeight,
+                Bitmap.Config.ARGB_8888
+            )
+        }
+        val canvas = Canvas(bitmap)
+        drawable.setBounds(0, 0, canvas.width, canvas.height)
+        drawable.draw(canvas)
+        return bitmap
     }
 
     fun addApp(packageName: String, onComplete: () -> Unit) {
