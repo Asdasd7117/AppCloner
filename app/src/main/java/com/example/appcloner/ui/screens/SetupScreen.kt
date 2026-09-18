@@ -3,97 +3,62 @@ package com.example.appcloner.ui.screens
 import android.app.Activity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import com.example.appcloner.admin.ProfileManager
+import com.example.appcloner.ui.viewmodel.SetupViewModel
 
 @Composable
 fun SetupScreen(
-    profileManager: ProfileManager,
+    viewModel: SetupViewModel,
     onSetupComplete: () -> Unit
 ) {
-    var hasProfile by remember { mutableStateOf(profileManager.hasWorkProfile()) }
+    val context = LocalContext.current
+    val hasWorkProfileState by viewModel.hasWorkProfile.collectAsState()
 
-    val setupLauncher = rememberLauncherForActivityResult(
+    val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
-        hasProfile = profileManager.hasWorkProfile()
-        if (result.resultCode == Activity.RESULT_OK && hasProfile) {
+        if (result.resultCode == Activity.RESULT_OK) {
+            viewModel.checkWorkProfile()
             onSetupComplete()
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(
-            text = "إعداد البيئة المعزولة",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
-        Spacer(Modifier.height(16.dp))
-
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(16.dp)) {
-                Text(
-                    text = "الحالة الحالية:",
-                    style = MaterialTheme.typography.titleSmall
-                )
-                Spacer(Modifier.height(8.dp))
-                Text("• Work Profile: ${if (hasProfile) "✅ مفعل ومجهز" else "❌ غير مفعل"}")
-            }
+    LaunchedEffect(hasWorkProfileState) {
+        if (hasWorkProfileState) {
+            onSetupComplete()
         }
+    }
 
-        Spacer(Modifier.height(24.dp))
+    Scaffold { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Text(
+                    text = "يتطلب التطبيق إعداد Work Profile لنسخ التطبيقات.",
+                    style = MaterialTheme.typography.bodyLarge
+                )
 
-        if (!hasProfile) {
-            Text(
-                text = "إنشاء بيئة عمل معزولة",
-                style = MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = "اضغط على الزر أدناه لبدء إنشاء Work Profile وتثبيت المحاكي داخله تلقائياً.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(Modifier.height(16.dp))
-            Button(
-                onClick = {
-                    val intent = profileManager.createWorkProfileIntent()
-                    setupLauncher.launch(intent)
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("إنشاء البيئة المعزولة الآن")
-            }
-        } else {
-            Button(
-                onClick = onSetupComplete,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("الدخول إلى التطبيق")
+                Button(
+                    onClick = {
+                        val intent = viewModel.createWorkProfileIntent()
+                        launcher.launch(intent)
+                    }
+                ) {
+                    Text("إنشاء Work Profile")
+                }
             }
         }
     }
