@@ -8,9 +8,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.unit.dp
 import com.example.appcloner.ui.viewmodel.AppPickerViewModel
-import com.google.accompanist.drawablepainter.rememberDrawablePainter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,9 +73,9 @@ fun AppPickerScreen(
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            app.icon?.let { drawable ->
+                            app.iconBitmap?.let { bitmap ->
                                 Image(
-                                    painter = rememberDrawablePainter(drawable),
+                                    bitmap = bitmap.asImageBitmap(),
                                     contentDescription = null,
                                     modifier = Modifier.size(48.dp)
                                 )
