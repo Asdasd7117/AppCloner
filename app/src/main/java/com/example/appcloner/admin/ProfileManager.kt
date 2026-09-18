@@ -100,7 +100,6 @@ class ProfileManager @Inject constructor(
                 ?: throw IllegalStateException("لا يوجد Work Profile مفعل.")
 
             if (isProfileOwner()) {
-                // إذا كنا نفذنا الكود من داخل بيئة العمل
                 val dpm = getDpm()
                 dpm.setApplicationHidden(adminComponent, packageName, false)
 
@@ -110,7 +109,6 @@ class ProfileManager @Inject constructor(
                     dpm.enableSystemApp(adminComponent, packageName)
                 }
             } else {
-                // إذا كنا نفذنا الكود من البروفايل الرئيسي، نرسل أمر التثبيت للـ Work Profile
                 val intent = Intent(WorkProfileReceiver.ACTION_INSTALL_APP).apply {
                     setPackage(context.packageName)
                     putExtra("EXTRA_PACKAGE_NAME", packageName)
@@ -122,7 +120,7 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تشغيل التطبيق المنسوخ بأسلوب مضمون عبر LauncherApps
+     * تشغيل التطبيق المنسوخ وإرسال أمر تثبيته تلقائياً إذا لم يكن مفعلاً
      */
     fun launchAppInWorkProfile(packageName: String): Boolean {
         clearError()
@@ -135,7 +133,20 @@ class ProfileManager @Inject constructor(
             }
 
             val launcherApps = getLauncherApps()
-            val activities = launcherApps.getActivityList(packageName, workHandle)
+            var activities = launcherApps.getActivityList(packageName, workHandle)
+
+            // في حال لم يجد التطبيق ظاهراً، يرسل بث التثبيت فوراً لبيئة العمل
+            if (activities.isEmpty()) {
+                val intent = Intent(WorkProfileReceiver.ACTION_INSTALL_APP).apply {
+                    setPackage(context.packageName)
+                    putExtra("EXTRA_PACKAGE_NAME", packageName)
+                }
+                context.sendBroadcastAsUser(intent, workHandle)
+
+                // مهلة قصيرة لإعطاء النظام فرصة لتجهيز الأكتيفيتي
+                Thread.sleep(400)
+                activities = launcherApps.getActivityList(packageName, workHandle)
+            }
 
             if (activities.isNotEmpty()) {
                 val mainActivity = activities.first()
@@ -148,7 +159,7 @@ class ProfileManager @Inject constructor(
                 clearError()
                 true
             } else {
-                setError("❌ التطبيق غير مفعل داخل Work Profile. أعد إضافته مجدداً.")
+                setError("❌ جاري تحضير التطبيق داخل Work Profile، يرجى إعادة النقر مرة أخرى.")
                 false
             }
         } catch (e: SecurityException) {
