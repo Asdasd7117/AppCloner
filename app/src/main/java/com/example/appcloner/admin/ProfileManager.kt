@@ -74,11 +74,19 @@ class ProfileManager @Inject constructor(
         }
     }
 
+    /**
+     * إنشاء إنتنت إعداد الـ Work Profile مع إجبار النظام على نسخ وتثبيت تطبيقك داخله
+     */
     fun createWorkProfileIntent(): Intent {
         return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
             putExtra(
                 DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
                 adminComponent
+            )
+            // إجبار النظام على نسخ تطبيقك الحالي وتثبيته داخل الـ Work Profile فور إنشائه
+            putExtra(
+                DevicePolicyManager.EXTRA_PROVISIONING_PACKAGE_NAME,
+                context.packageName
             )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putExtra(
