@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -18,6 +19,12 @@ fun HomeScreen(
     onNavigateToPicker: () -> Unit
 ) {
     val clonedApps by viewModel.clonedApps.collectAsState()
+
+    // إعادة تحميل قائمة التطبيقات المنسوخة فور عرض الشاشة أو العودة إليها
+    DisposableEffect(Unit) {
+        viewModel.loadClonedApps()
+        onDispose { }
+    }
 
     Scaffold(
         floatingActionButton = {
