@@ -78,10 +78,6 @@ class ProfileManager @Inject constructor(
                 DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
                 adminComponent
             )
-            putExtra(
-                DevicePolicyManager.EXTRA_PROVISIONING_PACKAGE_NAME,
-                context.packageName
-            )
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 putExtra(
                     DevicePolicyManager.EXTRA_PROVISIONING_SKIP_ENCRYPTION,
@@ -118,9 +114,6 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * تشغيل التطبيق المنسوخ بأسلوب مضمون مع الانتظار الذكي (Polling) لتثبيت التطبيق
-     */
     suspend fun launchAppInWorkProfile(packageName: String): Boolean = withContext(Dispatchers.IO) {
         clearError()
 
@@ -134,7 +127,6 @@ class ProfileManager @Inject constructor(
             val launcherApps = getLauncherApps()
             var activities = launcherApps.getActivityList(packageName, workHandle)
 
-            // إرسال أمر التثبيت إذا لم يكن التطبيق متاحاً داخل الـ Work Profile
             if (activities.isEmpty()) {
                 val intent = Intent(WorkProfileReceiver.ACTION_INSTALL_APP).apply {
                     setPackage(context.packageName)
@@ -142,7 +134,6 @@ class ProfileManager @Inject constructor(
                 }
                 context.sendBroadcastAsUser(intent, workHandle)
 
-                // المحاولة لـ 5 مرات متتالية بين كل محاولة والأخرى 300ms
                 for (i in 1..5) {
                     delay(300)
                     activities = launcherApps.getActivityList(packageName, workHandle)
