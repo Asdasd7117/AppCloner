@@ -13,6 +13,7 @@ import android.os.UserHandle
 import android.os.UserManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,9 +54,6 @@ class ProfileManager @Inject constructor(
         return getWorkProfileHandle() != null
     }
 
-    /**
-     * جلب مقبض (UserHandle) الخاص بـ Work Profile
-     */
     fun getWorkProfileHandle(): UserHandle? {
         return try {
             val userManager = getUserManager()
@@ -74,16 +72,12 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * إنشاء إنتنت إعداد الـ Work Profile مع إجبار النظام على نسخ وتثبيت تطبيقك داخله
-     */
     fun createWorkProfileIntent(): Intent {
         return Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
             putExtra(
                 DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME,
                 adminComponent
             )
-            // إجبار النظام على نسخ تطبيقك الحالي وتثبيته داخل الـ Work Profile فور إنشائه
             putExtra(
                 DevicePolicyManager.EXTRA_PROVISIONING_PACKAGE_NAME,
                 context.packageName
@@ -97,9 +91,6 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * تثبيت وإتاحة التطبيق داخل Work Profile إما مباشرة أو عن طريق إرسال broadcast لبيئة العمل
-     */
     suspend fun installAppInWorkProfile(
         packageName: String
     ): Result<Unit> = withContext(Dispatchers.IO) {
@@ -128,22 +119,22 @@ class ProfileManager @Inject constructor(
     }
 
     /**
-     * تشغيل التطبيق المنسوخ وإرسال أمر تثبيته تلقائياً إذا لم يكن مفعلاً
+     * تشغيل التطبيق المنسوخ بأسلوب مضمون مع الانتظار الذكي (Polling) لتثبيت التطبيق
      */
-    fun launchAppInWorkProfile(packageName: String): Boolean {
+    suspend fun launchAppInWorkProfile(packageName: String): Boolean = withContext(Dispatchers.IO) {
         clearError()
 
-        return try {
+        try {
             val workHandle = getWorkProfileHandle()
             if (workHandle == null) {
                 setError("❌ فشل الفتح: لا يوجد Work Profile مفعل.")
-                return false
+                return@withContext false
             }
 
             val launcherApps = getLauncherApps()
             var activities = launcherApps.getActivityList(packageName, workHandle)
 
-            // في حال لم يجد التطبيق ظاهراً، يرسل بث التثبيت فوراً لبيئة العمل
+            // إرسال أمر التثبيت إذا لم يكن التطبيق متاحاً داخل الـ Work Profile
             if (activities.isEmpty()) {
                 val intent = Intent(WorkProfileReceiver.ACTION_INSTALL_APP).apply {
                     setPackage(context.packageName)
@@ -151,9 +142,12 @@ class ProfileManager @Inject constructor(
                 }
                 context.sendBroadcastAsUser(intent, workHandle)
 
-                // مهلة قصيرة لإعطاء النظام فرصة لتجهيز الأكتيفيتي
-                Thread.sleep(400)
-                activities = launcherApps.getActivityList(packageName, workHandle)
+                // المحاولة لـ 5 مرات متتالية بين كل محاولة والأخرى 300ms
+                for (i in 1..5) {
+                    delay(300)
+                    activities = launcherApps.getActivityList(packageName, workHandle)
+                    if (activities.isNotEmpty()) break
+                }
             }
 
             if (activities.isNotEmpty()) {
@@ -167,7 +161,7 @@ class ProfileManager @Inject constructor(
                 clearError()
                 true
             } else {
-                setError("❌ جاري تحضير التطبيق داخل Work Profile، يرجى إعادة النقر مرة أخرى.")
+                setError("❌ لم يتجاوب Work Profile لتثبيت التطبيق. أعد محاولة الفتح.")
                 false
             }
         } catch (e: SecurityException) {
@@ -191,9 +185,6 @@ class ProfileManager @Inject constructor(
         }
     }
 
-    /**
-     * إخفاء/حذف التطبيق من بيئة العمل
-     */
     suspend fun uninstallAppFromWorkProfile(packageName: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
