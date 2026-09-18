@@ -20,6 +20,7 @@ fun AppPickerScreen(
 ) {
     val searchQuery by viewModel.searchQuery.collectAsState()
     val availableApps by viewModel.availableApps.collectAsState()
+    val loadingPackage by viewModel.loadingPackage.collectAsState()
 
     val filteredApps = remember(searchQuery, availableApps) {
         if (searchQuery.isBlank()) {
@@ -64,6 +65,8 @@ fun AppPickerScreen(
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredApps) { app ->
+                    val isLoading = loadingPackage == app.packageName
+
                     Card(
                         modifier = Modifier.fillMaxWidth()
                     ) {
@@ -92,12 +95,23 @@ fun AppPickerScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            Button(onClick = {
-                                viewModel.addApp(app.packageName) {
-                                    onBack()
+                            Button(
+                                enabled = loadingPackage == null,
+                                onClick = {
+                                    viewModel.addApp(app.packageName) {
+                                        onBack()
+                                    }
                                 }
-                            }) {
-                                Text("نسخ")
+                            ) {
+                                if (isLoading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(20.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                } else {
+                                    Text("نسخ")
+                                }
                             }
                         }
                     }
