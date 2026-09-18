@@ -13,10 +13,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,18 +32,11 @@ fun SetupScreen(
 ) {
     var hasProfile by remember { mutableStateOf(profileManager.hasWorkProfile()) }
 
-    // مشغل الواجهة الخاصة بإعداد Work Profile المعيارية من نظام Android
     val setupLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         hasProfile = profileManager.hasWorkProfile()
-        if (result.resultCode == Activity.RESULT_OK || hasProfile) {
-            onSetupComplete()
-        }
-    }
-
-    LaunchedEffect(hasProfile) {
-        if (hasProfile) {
+        if (result.resultCode == Activity.RESULT_OK && hasProfile) {
             onSetupComplete()
         }
     }
@@ -71,7 +62,7 @@ fun SetupScreen(
                     style = MaterialTheme.typography.titleSmall
                 )
                 Spacer(Modifier.height(8.dp))
-                Text("• Work Profile: ${if (hasProfile) "✅ مفعل" else "❌ غير مفعل"}")
+                Text("• Work Profile: ${if (hasProfile) "✅ مفعل ومجهز" else "❌ غير مفعل"}")
             }
         }
 
@@ -84,7 +75,7 @@ fun SetupScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = "اضغط على الزر أدناه لبدء إنشاء Work Profile مباشرة عبر النظام وبدون كمبيوتر.",
+                text = "اضغط على الزر أدناه لبدء إنشاء Work Profile وتثبيت المحاكي داخله تلقائياً.",
                 style = MaterialTheme.typography.bodyMedium
             )
             Spacer(Modifier.height(16.dp))
@@ -97,14 +88,13 @@ fun SetupScreen(
             ) {
                 Text("إنشاء البيئة المعزولة الآن")
             }
-        }
-
-        Spacer(Modifier.height(16.dp))
-        OutlinedButton(
-            onClick = onSetupComplete,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("متابعة على أي حال")
+        } else {
+            Button(
+                onClick = onSetupComplete,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("الدخول إلى التطبيق")
+            }
         }
     }
 }
