@@ -1,9 +1,7 @@
 package com.example.appcloner.di
 
 import android.content.Context
-import androidx.room.Room
-import com.example.appcloner.data.local.AppDatabase
-import com.example.appcloner.data.local.ClonedAppDao
+import com.example.appcloner.virtual.VirtualAppManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,14 +15,9 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
-        return Room.databaseBuilder(
-            context,
-            AppDatabase::class.java,
-            "app_cloner.db"
-        ).build()
+    fun provideVirtualAppManager(
+        @ApplicationContext context: Context
+    ): VirtualAppManager {
+        return VirtualAppManager(context)
     }
-
-    @Provides
-    fun provideClonedAppDao(db: AppDatabase): ClonedAppDao = db.clonedAppDao()
 }
