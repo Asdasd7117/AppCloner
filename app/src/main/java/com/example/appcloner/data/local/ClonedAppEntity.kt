@@ -5,8 +5,8 @@ import androidx.room.PrimaryKey
 
 @Entity(tableName = "cloned_apps")
 data class ClonedAppEntity(
-    @PrimaryKey val packageName: String,
-    val label: String,
-    val addedAt: Long = System.currentTimeMillis(),
-    val isEnabled: Boolean = true
+    @PrimaryKey
+    val packageName: String,
+    val appName: String,
+    val isCloned: Boolean = true
 )
