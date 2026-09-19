@@ -1,30 +1,45 @@
-package com.example.appcloner.data.local
+package com.example.appcloner.data.repository
 
-import androidx.room.Dao
-import androidx.room.Delete
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
-import androidx.room.Query
-import androidx.room.Update
+import com.example.appcloner.data.local.ClonedAppDao
+import com.example.appcloner.data.local.ClonedAppEntity
+import com.example.appcloner.domain.model.AppInfo
+import com.example.appcloner.virtual.VirtualAppManager
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import javax.inject.Inject
+import javax.inject.Singleton
 
-@Dao
-interface ClonedAppDao {
-    @Query("SELECT * FROM cloned_apps ORDER BY addedAt DESC")
-    fun getAllClonedApps(): Flow<List<ClonedAppEntity>>
+@Singleton
+class AppRepository @Inject constructor(
+    private val virtualAppManager: VirtualAppManager,
+    private val clonedAppDao: ClonedAppDao
+) {
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(app: ClonedAppEntity)
+    // جلب القائمة مباشرة من قاعدة البيانات وتحديث UI تلقائياً عبر Flow
+    fun getClonedAppsFlow(): Flow<List<AppInfo>> {
+        return clonedAppDao.getAllClonedApps().map { entities ->
+            entities.map { entity ->
+                virtualAppManager.getAppInfoForPackage(entity.packageName)
+                    ?: AppInfo(
+                        packageName = entity.packageName,
+                        label = entity.appName,
+                        icon = null
+                    )
+            }
+        }
+    }
 
-    @Update
-    suspend fun update(app: ClonedAppEntity)
+    suspend fun addAppToVirtualEnv(packageName: String, appName: String) {
+        clonedAppDao.insert(ClonedAppEntity(packageName = packageName, appName = appName))
+        virtualAppManager.addAppToVirtualEnv(packageName)
+    }
 
-    @Delete
-    suspend fun delete(app: ClonedAppEntity)
+    suspend fun uninstallApp(packageName: String) {
+        clonedAppDao.deleteByPackage(packageName)
+        virtualAppManager.removeAppFromVirtualEnv(packageName)
+    }
 
-    @Query("DELETE FROM cloned_apps WHERE packageName = :packageName")
-    suspend fun deleteByPackage(packageName: String)
+    fun launchApp(packageName: String): Boolean = virtualAppManager.launchVirtualApp(packageName)
 
-    @Query("SELECT * FROM cloned_apps WHERE packageName = :packageName")
-    suspend fun getByPackage(packageName: String): ClonedAppEntity?
+    fun getPersonalApps(): List<AppInfo> = virtualAppManager.getInstalledPersonalAppsInfo()
 }
