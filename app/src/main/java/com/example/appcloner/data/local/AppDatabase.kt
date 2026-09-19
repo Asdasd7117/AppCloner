@@ -1,11 +1,20 @@
 package com.example.appcloner.data.local
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 
-@Entity(tableName = "cloned_apps")
-data class ClonedAppEntity(
-    @PrimaryKey val packageName: String,
-    val appName: String,
-    val addedAt: Long = System.currentTimeMillis()
-)
+@Dao
+interface ClonedAppDao {
+
+    @Query("SELECT * FROM cloned_apps")
+    fun getAllApps(): Flow<List<ClonedAppEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertApp(app: ClonedAppEntity)
+
+    @Query("DELETE FROM cloned_apps WHERE packageName = :packageName")
+    suspend fun deleteAppByPackage(packageName: String)
+}
