@@ -21,8 +21,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false // إيقاف التقييد المؤقت لتجنب حذف الأكواد المولدة أثناء الـ Release
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -44,14 +44,19 @@ android {
     }
 }
 
+// تكوين KSP الضروري لعمل Hilt مع Room دون أخطاء
+ksp {
+    arg("correctErrorTypes", "true")
+}
+
 dependencies {
     // Core
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.6")
     implementation("androidx.activity:activity-compose:1.9.2")
 
-    // Material (مهم جداً لحل مشكلة الثيم)
-    implementation("com.google.android.material:material:1.11.0")
+    // Material
+    implementation("com.google.android.material:material:1.12.0")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2024.09.02"))
