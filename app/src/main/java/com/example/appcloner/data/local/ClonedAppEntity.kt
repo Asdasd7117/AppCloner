@@ -1,12 +1,13 @@
 package com.example.appcloner.data.local
 
-import androidx.room.Entity
-import androidx.room.PrimaryKey
+import androidx.room.Database
+import androidx.room.RoomDatabase
 
-@Entity(tableName = "cloned_apps")
-data class ClonedAppEntity(
-    @PrimaryKey
-    val packageName: String,
-    val appName: String,
-    val isCloned: Boolean = true
+@Database(
+    entities = [ClonedAppEntity::class],
+    version = 1,
+    exportSchema = false
 )
+abstract class AppDatabase : RoomDatabase() {
+    abstract fun clonedAppDao(): ClonedAppDao
+}
