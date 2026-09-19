@@ -1,39 +1,21 @@
 package com.example.appcloner.data.repository
 
-import com.example.appcloner.admin.ProfileManager
+import com.example.appcloner.virtual.VirtualAppManager
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AppRepository @Inject constructor(
-    private val profileManager: ProfileManager
+    private val virtualAppManager: VirtualAppManager
 ) {
 
-    fun getInstalledApps(): List<String> {
-        return profileManager.getPersonalApps()
-    }
+    fun getClonedApps(): List<String> = virtualAppManager.getClonedApps()
 
-    fun getClonedApps(): List<String> {
-        return profileManager.getWorkProfileApps()
-    }
+    fun launchApp(packageName: String): Boolean = virtualAppManager.launchVirtualApp(packageName)
 
-    suspend fun installApp(packageName: String): Result<Unit> {
-        return profileManager.installAppInWorkProfile(packageName)
-    }
+    fun uninstallApp(packageName: String): Boolean = virtualAppManager.removeAppFromVirtualEnv(packageName)
 
-    suspend fun launchApp(packageName: String): Boolean {
-        return profileManager.launchAppInWorkProfile(packageName)
-    }
+    fun getPersonalApps(): List<String> = virtualAppManager.getInstalledPersonalApps()
 
-    fun stopApp(packageName: String): String {
-        return profileManager.stopAppInWorkProfile(packageName)
-    }
-
-    suspend fun uninstallApp(packageName: String): Result<Unit> {
-        return profileManager.uninstallAppFromWorkProfile(packageName)
-    }
-
-    fun getLastError(): String {
-        return profileManager.getLastError()
-    }
+    fun addAppToVirtualEnv(packageName: String): Boolean = virtualAppManager.addAppToVirtualEnv(packageName)
 }
