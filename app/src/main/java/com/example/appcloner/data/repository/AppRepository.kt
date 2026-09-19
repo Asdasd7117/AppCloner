@@ -1,50 +1,55 @@
 package com.example.appcloner.data.repository
 
+import com.example.appcloner.admin.ProfileManager
 import com.example.appcloner.data.local.ClonedAppDao
 import com.example.appcloner.data.local.ClonedAppEntity
-import com.example.appcloner.domain.model.AppInfo
-import com.example.appcloner.virtual.VirtualAppManager
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class AppRepository @Inject constructor(
-    private val virtualAppManager: VirtualAppManager,
+    private val profileManager: ProfileManager,
     private val clonedAppDao: ClonedAppDao
 ) {
 
-    // جلب التطبيقات المنسوخة من Room وتحويلها لـ AppInfo مع جلب الأيقونة من VirtualAppManager
-    fun getClonedAppsFlow(): Flow<List<AppInfo>> {
-        return clonedAppDao.getAllClonedApps().map { entities ->
-            entities.map { entity ->
-                virtualAppManager.getAppInfoForPackage(entity.packageName)
-                    ?: AppInfo(
-                        packageName = entity.packageName,
-                        label = entity.label,
-                        icon = null
-                    )
-            }
-        }
+    val allClonedApps: Flow<List<ClonedAppEntity>> = clonedAppDao.getAllApps()
+
+    suspend fun launchApp(packageName: String): Boolean {
+        return profileManager.launchAppInWorkProfile(packageName)
     }
 
-    suspend fun addAppToVirtualEnv(packageName: String, label: String) {
-        clonedAppDao.insert(
-            ClonedAppEntity(
-                packageName = packageName,
-                label = label
+    suspend fun installApp(packageName: String): Result<Unit> {
+        val result = profileManager.installAppInWorkProfile(packageName)
+        if (result.isSuccess) {
+            clonedAppDao.insertApp(
+                ClonedAppEntity(
+                    packageName = packageName,
+                    appName = packageName,
+                    isCloned = true
+                )
             )
-        )
-        virtualAppManager.addAppToVirtualEnv(packageName)
+        }
+        return result
     }
 
-    suspend fun uninstallApp(packageName: String) {
-        clonedAppDao.deleteByPackage(packageName)
-        virtualAppManager.removeAppFromVirtualEnv(packageName)
+    suspend fun uninstallApp(packageName: String): Result<Unit> {
+        val result = profileManager.uninstallAppFromWorkProfile(packageName)
+        if (result.isSuccess) {
+            clonedAppDao.deleteAppByPackage(packageName)
+        }
+        return result
     }
 
-    fun launchApp(packageName: String): Boolean = virtualAppManager.launchVirtualApp(packageName)
+    fun getInstalledApps(): List<String> {
+        return profileManager.getPersonalApps()
+    }
 
-    fun getPersonalApps(): List<AppInfo> = virtualAppManager.getInstalledPersonalAppsInfo()
+    fun getClonedApps(): List<String> {
+        return profileManager.getWorkProfileApps()
+    }
+
+    fun getLastError(): String {
+        return profileManager.getLastError()
+    }
 }
