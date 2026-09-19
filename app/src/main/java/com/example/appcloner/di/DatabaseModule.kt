@@ -17,13 +17,15 @@ object DatabaseModule {
 
     @Provides
     @Singleton
-    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+    fun provideAppDatabase(
+        @ApplicationContext context: Context
+    ): AppDatabase {
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
             "app_cloner_database"
         )
-        .fallbackToDestructiveMigration() // مهم جداً لتفادي أعطال تحديث الجداول
+        .fallbackToDestructiveMigration()
         .build()
     }
 
