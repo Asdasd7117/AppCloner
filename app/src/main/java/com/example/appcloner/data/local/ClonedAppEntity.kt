@@ -1,13 +1,37 @@
-package com.example.appcloner.data.local
+package com.example.appcloner.di
 
-import androidx.room.Database
-import androidx.room.RoomDatabase
+import android.content.Context
+import androidx.room.Room
+import com.example.appcloner.data.local.AppDatabase
+import com.example.appcloner.data.local.ClonedAppDao
+import dagger.Module
+import dagger.Provides
+import dagger.hilt.InstallIn
+import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.hilt.components.SingletonComponent
+import javax.inject.Singleton
 
-@Database(
-    entities = [ClonedAppEntity::class],
-    version = 1,
-    exportSchema = false
-)
-abstract class AppDatabase : RoomDatabase() {
-    abstract fun clonedAppDao(): ClonedAppDao
+@Module
+@InstallIn(SingletonComponent::class)
+object DatabaseModule {
+
+    @Provides
+    @Singleton
+    fun provideAppDatabase(
+        @ApplicationContext context: Context
+    ): AppDatabase {
+        return Room.databaseBuilder(
+            context,
+            AppDatabase::class.java,
+            "app_cloner_database"
+        )
+        .fallbackToDestructiveMigration()
+        .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideClonedAppDao(database: AppDatabase): ClonedAppDao {
+        return database.clonedAppDao()
+    }
 }
